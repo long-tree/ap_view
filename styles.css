@@ -1,0 +1,305 @@
+:root {
+  --bg: #f5f7f8;
+  --panel: #ffffff;
+  --ink: #172026;
+  --muted: #63707a;
+  --line: #d8e0e4;
+  --accent: #126b78;
+  --accent-2: #c2582c;
+  --good: #2d7d46;
+  --warn: #b98514;
+  --danger: #b63f46;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg);
+  font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-right: 1px solid var(--line);
+  background: #eef3f4;
+  padding: 16px;
+  overflow: auto;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.brand p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.field span,
+.upload span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+select,
+button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+button {
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+button:hover,
+select:hover {
+  border-color: #9fb0b8;
+}
+
+.upload {
+  display: grid;
+  gap: 6px;
+}
+
+.upload input {
+  width: 100%;
+  border: 1px dashed #a8b7be;
+  border-radius: 6px;
+  background: #f9fbfb;
+  padding: 8px;
+}
+
+.toggles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary {
+  display: grid;
+  gap: 8px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.kv b {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kv span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.list-panel {
+  min-height: 180px;
+}
+
+.object-list {
+  display: grid;
+  gap: 6px;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.object-row {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 8px;
+  align-items: start;
+  border: 1px solid #e5ecef;
+  border-radius: 6px;
+  padding: 7px;
+  background: #fbfcfc;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+
+.object-row strong {
+  display: block;
+  font-size: 13px;
+}
+
+.object-row small {
+  display: block;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.stage {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: #dfe7ea;
+}
+
+.toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(28, 42, 49, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(25, 45, 54, 0.12);
+}
+
+#cursorReadout {
+  min-width: 190px;
+  color: var(--muted);
+}
+
+#viewer {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  cursor: grab;
+}
+
+#viewer.dragging {
+  cursor: grabbing;
+}
+
+.legend {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  max-width: min(720px, calc(100% - 28px));
+  border: 1px solid rgba(28, 42, 49, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 9px 11px;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.legend .ego {
+  background: var(--accent);
+}
+
+.legend .static {
+  background: var(--warn);
+}
+
+.legend .vehicle {
+  background: var(--danger);
+}
+
+.legend .traffic {
+  background: var(--good);
+}
+
+.legend .dynamic {
+  background: #7357b8;
+}
+
+@media (max-width: 900px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    max-height: 48vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  #viewer {
+    height: 52vh;
+  }
+}

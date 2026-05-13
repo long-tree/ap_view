@@ -1,0 +1,78 @@
+{
+  "source": "/home/ng/.apollo/resources/scenario_sets/69d52dd10e41e17bc62fda1a/scenarios",
+  "generatedAt": "2026-05-13T12:32:23.716Z",
+  "scenarios": [
+    {
+      "file": "69d420a3b58e96002b6da084.json",
+      "name": "xh_2026_红绿灯场景_1 (69d420a3b58e96002b6da084.json)",
+      "id": "69d420a3b58e96002b6da084",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da079.json",
+      "name": "xh_2026_S弯场景_1 (69d520a3b58e96002b6da079.json)",
+      "id": "69d520a3b58e96002b6da079",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da07a.json",
+      "name": "xh_2026_S弯场景_2 (69d520a3b58e96002b6da07a.json)",
+      "id": "69d520a3b58e96002b6da07a",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da07b.json",
+      "name": "xh_2026_U形弯道场景_1 (69d520a3b58e96002b6da07b.json)",
+      "id": "69d520a3b58e96002b6da07b",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da07c.json",
+      "name": "xh_2026_U形弯道场景_2 (69d520a3b58e96002b6da07c.json)",
+      "id": "69d520a3b58e96002b6da07c",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da07d.json",
+      "name": "xh_2026_变道场景 (69d520a3b58e96002b6da07d.json)",
+      "id": "69d520a3b58e96002b6da07d",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da07e.json",
+      "name": "xh_2026_施工区域通行_1 (69d520a3b58e96002b6da07e.json)",
+      "id": "69d520a3b58e96002b6da07e",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da07f.json",
+      "name": "xh_2026_施工区域通行_2 (69d520a3b58e96002b6da07f.json)",
+      "id": "69d520a3b58e96002b6da07f",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da080.json",
+      "name": "xh_2026_环岛让行场景_1 (69d520a3b58e96002b6da080.json)",
+      "id": "69d520a3b58e96002b6da080",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da081.json",
+      "name": "xh_2026_站点接驳场景_1 (69d520a3b58e96002b6da081.json)",
+      "id": "69d520a3b58e96002b6da081",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da082.json",
+      "name": "xh_2026_站点接驳场景_2 (69d520a3b58e96002b6da082.json)",
+      "id": "69d520a3b58e96002b6da082",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    },
+    {
+      "file": "69d520a3b58e96002b6da084.json",
+      "name": "xh_2026_红绿灯场景_2 (69d520a3b58e96002b6da084.json)",
+      "id": "69d520a3b58e96002b6da084",
+      "mapId": "69d51ffd0e41e1217f2fda19"
+    }
+  ]
+}

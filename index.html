@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Apollo Scenario Viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <header class="brand">
+          <div>
+            <h1>Apollo Scenario Viewer</h1>
+            <p>JSON-only obstacle and route visualizer</p>
+          </div>
+        </header>
+
+        <section class="panel">
+          <label class="field">
+            <span>场景样本</span>
+            <select id="sampleSelect"></select>
+          </label>
+          <label class="upload" for="fileInput">
+            <span>上传 scenario JSON</span>
+            <input id="fileInput" type="file" accept=".json,application/json" />
+          </label>
+        </section>
+
+        <section class="panel">
+          <h2>图层</h2>
+          <div id="layerToggles" class="toggles"></div>
+        </section>
+
+        <section class="panel">
+          <h2>信息</h2>
+          <div id="summary" class="summary"></div>
+        </section>
+
+        <section class="panel list-panel">
+          <h2>对象</h2>
+          <div id="objectList" class="object-list"></div>
+        </section>
+      </aside>
+
+      <main class="stage">
+        <div class="toolbar">
+          <button id="fitButton" type="button">适配</button>
+          <button id="resetButton" type="button">重置视图</button>
+          <span id="cursorReadout">x: -, y: -</span>
+        </div>
+        <canvas id="viewer" width="1600" height="1000"></canvas>
+        <div class="legend">
+          <span><i class="ego"></i>主车起终点</span>
+          <span><i class="static"></i>静态障碍物</span>
+          <span><i class="vehicle"></i>车辆</span>
+          <span><i class="traffic"></i>红绿灯</span>
+          <span><i class="dynamic"></i>动态交通</span>
+        </div>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
