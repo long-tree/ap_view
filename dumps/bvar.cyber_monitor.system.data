@@ -1,0 +1,31 @@
+cyber_monitor_kernel_version : "Linux in-dev-docker 5.15.167.4-microsoft-standard-WSL2 #1 SMP Tue Nov 5 00:21:55 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+"
+cyber_monitor_process_cmdline : "cyber_monitor
+"
+cyber_monitor_process_context_switches_involuntary_second : 0
+cyber_monitor_process_context_switches_voluntary_second : 8550
+cyber_monitor_process_cpu_usage : 0.066
+cyber_monitor_process_cpu_usage_system : 0.033
+cyber_monitor_process_cpu_usage_user : 0.033
+cyber_monitor_process_disk_read_bytes_second : 0
+cyber_monitor_process_disk_write_bytes_second : 9010
+cyber_monitor_process_faults_major : 0
+cyber_monitor_process_faults_minor_second : 9
+cyber_monitor_process_fd_count : 32
+cyber_monitor_process_inblocks_second : 0
+cyber_monitor_process_io_read_bytes_second : 568
+cyber_monitor_process_io_read_second : 5
+cyber_monitor_process_io_write_bytes_second : 8428
+cyber_monitor_process_io_write_second : 17
+cyber_monitor_process_memory_data_and_stack : 530284544
+cyber_monitor_process_memory_resident : 93798400
+cyber_monitor_process_memory_shared : 67850240
+cyber_monitor_process_memory_text : 942080
+cyber_monitor_process_memory_virtual : 2901643264
+cyber_monitor_process_nice : 0
+cyber_monitor_process_outblocks_second : 18
+cyber_monitor_process_priority : 20
+cyber_monitor_process_thread_count : 32
+cyber_monitor_process_uptime : 1280.373288
+cyber_monitor_process_username : "unknown (No such device or address)"
+cyber_monitor_process_work_dir : "/home/ng/apollo-scenario-viewer"

@@ -20,6 +20,7 @@ const layerDefs = [
   ["triggers", "触发条件"],
   ["labels", "标签"],
   ["bounds", "范围框"],
+  ["swapDims", "长宽翻转"],
 ];
 
 const colors = {
@@ -35,6 +36,7 @@ const colors = {
 };
 
 let layers = Object.fromEntries(layerDefs.map(([key]) => [key, true]));
+layers.swapDims = false;
 let currentScenario = null;
 let scene = null;
 let view = { scale: 1, offsetX: 0, offsetY: 0 };
@@ -217,6 +219,7 @@ function renderLayerToggles() {
     const input = event.target.closest("input[data-layer]");
     if (!input) return;
     layers[input.dataset.layer] = input.checked;
+    if (input.dataset.layer === "swapDims") renderObjects();
     draw();
   });
 }
@@ -254,15 +257,24 @@ function renderObjects() {
     const row = document.createElement("div");
     row.className = "object-row";
     const color = colorForKind(entity.kind);
+    const dims = effectiveDims(entity);
+    const suffix = layers.swapDims ? " | 已翻转" : "";
     row.innerHTML = `
       <i class="swatch" style="background:${color}"></i>
       <div>
         <strong>${escapeHtml(entity.ref)} <span>${escapeHtml(entity.kind)}</span></strong>
-        <small>pos ${pointText(entity.teleport)} | L ${entity.dims.length ?? "-"} W ${entity.dims.width ?? "-"} H ${entity.dims.height ?? "-"} | speed ${entity.speed ?? "-"}</small>
+        <small>pos ${pointText(entity.teleport)} | L ${dims.length ?? "-"} W ${dims.width ?? "-"} H ${entity.dims.height ?? "-"} | speed ${entity.speed ?? "-"}${suffix}</small>
       </div>
     `;
     objectList.appendChild(row);
   }
+}
+
+function effectiveDims(entity) {
+  const length = entity.dims.length;
+  const width = entity.dims.width;
+  if (!layers.swapDims) return { length, width };
+  return { length: width, width: length };
 }
 
 function colorForKind(kind) {
@@ -470,8 +482,9 @@ function drawPoint(p, label, color, radius) {
 function drawObjectBox(entity, color) {
   const p = entity.teleport;
   const q = worldToScreen(p);
-  const length = Math.max(0.2, Number(entity.dims.length) || 0.8) * view.scale;
-  const width = Math.max(0.2, Number(entity.dims.width) || 0.8) * view.scale;
+  const dims = effectiveDims(entity);
+  const length = Math.max(0.2, Number(dims.length) || 0.8) * view.scale;
+  const width = Math.max(0.2, Number(dims.width) || 0.8) * view.scale;
   const heading = Number(p.h || 0);
   ctx.save();
   ctx.translate(q.x, q.y);
