@@ -858,6 +858,59 @@ function hexToRgba(hex, alpha) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
+function nearestLaneSl(point) {
+  const map = mapLayer.data;
+  if (!map?.lanes?.length) return null;
+  const maxDistance = Math.max(6, 36 / Math.max(view.scale, 0.001));
+  const maxDistanceSq = maxDistance * maxDistance;
+  let best = null;
+
+  for (const lane of map.lanes) {
+    const center = lane.center || [];
+    if (center.length < 2) continue;
+    let sBase = 0;
+    for (let i = 0; i < center.length - 1; i += 1) {
+      const a = center[i];
+      const b = center[i + 1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq <= 1e-9) continue;
+      const rawT = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq;
+      const t = Math.max(0, Math.min(1, rawT));
+      const proj = { x: a.x + dx * t, y: a.y + dy * t };
+      const px = point.x - proj.x;
+      const py = point.y - proj.y;
+      const distSq = px * px + py * py;
+      if (distSq <= maxDistanceSq && (!best || distSq < best.distanceSq)) {
+        const segLen = Math.sqrt(lenSq);
+        const cross = dx * (point.y - a.y) - dy * (point.x - a.x);
+        const signedL = Math.sign(cross || 1) * Math.sqrt(distSq);
+        best = {
+          lane,
+          roadId: lane.roadId || "-",
+          sectionId: lane.sectionId || "-",
+          laneId: lane.id || "-",
+          s: sBase + segLen * t,
+          l: signedL,
+          distance: Math.sqrt(distSq),
+          distanceSq: distSq,
+          projection: proj,
+        };
+      }
+      sBase += Math.sqrt(lenSq);
+    }
+  }
+  return best;
+}
+
+function cursorText(world) {
+  const sl = nearestLaneSl(world);
+  const xy = `x: ${fmt(world.x, 3)}, y: ${fmt(world.y, 3)}`;
+  if (!sl) return `${xy} | road: -, lane: -, s: -, l: -`;
+  return `${xy} | road: ${sl.roadId}, lane: ${sl.laneId}, s: ${fmt(sl.s, 2)}, l: ${fmt(sl.l, 2)}`;
+}
+
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
   const rect = canvas.getBoundingClientRect();
@@ -887,7 +940,7 @@ window.addEventListener("mousemove", (event) => {
   const rect = canvas.getBoundingClientRect();
   if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
     const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
-    cursorReadout.textContent = `x: ${fmt(world.x, 3)}, y: ${fmt(world.y, 3)}`;
+    cursorReadout.textContent = cursorText(world);
   }
   if (!dragging || !dragStart) return;
   view.offsetX = dragStart.offsetX + event.clientX - dragStart.x;

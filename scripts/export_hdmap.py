@@ -77,6 +77,15 @@ def add_points(out, points):
 
 
 def render_data(hdmap, src):
+    lane_to_road = {}
+    for road in hdmap.road:
+        for section in road.section:
+            for lane_id in section.lane_id:
+                lane_to_road[lane_id.id] = {
+                    "roadId": road.id.id,
+                    "sectionId": section.id.id,
+                }
+
     data = {
         "source": str(src),
         "lanes": [],
@@ -100,8 +109,11 @@ def render_data(hdmap, src):
     all_points = []
 
     for lane in hdmap.lane:
+        road_ref = lane_to_road.get(lane.id.id, {})
         item = {
             "id": lane.id.id,
+            "roadId": road_ref.get("roadId"),
+            "sectionId": road_ref.get("sectionId"),
             "center": curve_points(lane.central_curve),
             "left": curve_points(lane.left_boundary.curve),
             "right": curve_points(lane.right_boundary.curve),
