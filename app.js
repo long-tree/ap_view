@@ -2,14 +2,31 @@ const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
 const sampleSelect = document.getElementById("sampleSelect");
 const fileInput = document.getElementById("fileInput");
-const layerToggles = document.getElementById("layerToggles");
+const hdmapSelect = document.getElementById("hdmapSelect");
+const hdmapStatus = document.getElementById("hdmapStatus");
+const scenarioLayerToggles = document.getElementById("scenarioLayerToggles");
+const hdmapLayerToggles = document.getElementById("hdmapLayerToggles");
 const summary = document.getElementById("summary");
 const objectList = document.getElementById("objectList");
 const fitButton = document.getElementById("fitButton");
 const resetButton = document.getElementById("resetButton");
 const cursorReadout = document.getElementById("cursorReadout");
 
-const layerDefs = [
+const hdmapLayerDefs = [
+  ["map", "启用HDMap"],
+  ["laneCenters", "Lane中心"],
+  ["laneBoundaries", "Lane边界"],
+  ["laneTopology", "Lane拓扑"],
+  ["junctions", "路口区域"],
+  ["crosswalks", "人行横道"],
+  ["parking", "停车位"],
+  ["mapSignals", "地图信号"],
+  ["speedBumps", "减速带"],
+  ["yieldSigns", "让行线"],
+  ["mapLabels", "地图标签"],
+];
+
+const scenarioLayerDefs = [
   ["grid", "坐标网格"],
   ["ego", "主车路径"],
   ["waypoints", "路由点"],
@@ -33,12 +50,26 @@ const colors = {
   traffic: "#2d7d46",
   trigger: "#6d7880",
   bounds: "#c2582c",
+  laneCenter: "#7b858b",
+  laneBoundary: "#4d5961",
+  junction: "#8a7a2d",
+  crosswalk: "#5b7f8c",
+  parking: "#526fa8",
+  mapSignal: "#8d4c73",
+  topology: "#1f6f9d",
+  speedBump: "#984f22",
 };
 
-let layers = Object.fromEntries(layerDefs.map(([key]) => [key, true]));
+let layers = Object.fromEntries([...scenarioLayerDefs, ...hdmapLayerDefs].map(([key]) => [key, true]));
+layers.map = false;
+layers.laneTopology = false;
+layers.mapLabels = false;
 layers.swapDims = false;
 let currentScenario = null;
 let scene = null;
+let hdmapManifest = [];
+let selectedHdmap = null;
+let mapLayer = { key: null, data: null, status: "off", promise: null };
 let view = { scale: 1, offsetX: 0, offsetY: 0 };
 let dragging = false;
 let dragStart = null;
@@ -77,6 +108,43 @@ function collectWorldPositions(value, out = []) {
   }
   for (const child of Object.values(value)) collectWorldPositions(child, out);
   return out;
+}
+
+function collectCoordinatePairs(value, out = [], path = "") {
+  if (!value) return out;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectCoordinatePairs(item, out, `${path}[${index}]`));
+    return out;
+  }
+  if (typeof value !== "object") return out;
+
+  if (Number.isFinite(value.x) && Number.isFinite(value.y)) {
+    out.push({ x: value.x, y: value.y, path });
+  }
+  if (Number.isFinite(value.spawnX) && Number.isFinite(value.spawnY)) {
+    out.push({ x: value.spawnX, y: value.spawnY, path: `${path}.spawn` });
+  }
+  if (Number.isFinite(value.endX) && Number.isFinite(value.endY)) {
+    out.push({ x: value.endX, y: value.endY, path: `${path}.end` });
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    collectCoordinatePairs(child, out, path ? `${path}.${key}` : key);
+  }
+  return out;
+}
+
+function dedupePoints(points) {
+  const seen = new Set();
+  const unique = [];
+  for (const p of points) {
+    if (!Number.isFinite(p?.x) || !Number.isFinite(p?.y)) continue;
+    const key = `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ x: p.x, y: p.y });
+  }
+  return unique;
 }
 
 function extractScenario(json) {
@@ -132,6 +200,7 @@ function extractScenario(json) {
     addPoint(allPoints, { x: spawn.endX, y: spawn.endY });
     for (const p of spawn.routeWaypoints || []) addPoint(allPoints, p);
   }
+  const coordinatePoints = dedupePoints([...allPoints, ...collectCoordinatePairs(scenario)]);
 
   return {
     json,
@@ -145,7 +214,8 @@ function extractScenario(json) {
     dynamic,
     trafficLights,
     triggers,
-    bounds: boundsFor(allPoints),
+    coordinatePoints,
+    bounds: boundsFor(coordinatePoints),
   };
 }
 
@@ -184,9 +254,11 @@ function collectTriggers(storyboard) {
 function setScenario(json, label) {
   currentScenario = json;
   scene = extractScenario(json);
+  scene.label = label;
   renderSummary(label);
   renderObjects();
   fitToBounds();
+  if (layers.map) ensureMapLoaded();
 }
 
 async function loadManifest() {
@@ -202,41 +274,130 @@ async function loadManifest() {
   if (manifest.scenarios[0]) loadSample(manifest.scenarios[0].file);
 }
 
+async function loadHdmapManifest() {
+  const manifest = await fetch("./hdmaps/manifest.json").then((r) => r.json());
+  hdmapManifest = manifest.maps || [];
+  hdmapSelect.innerHTML = "";
+  for (const item of hdmapManifest) {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.name || item.id;
+    hdmapSelect.appendChild(option);
+  }
+  hdmapSelect.addEventListener("change", () => {
+    selectedHdmap = hdmapManifest.find((item) => item.id === hdmapSelect.value) || null;
+    mapLayer = { key: null, data: null, status: "off", promise: null };
+    if (layers.map) ensureMapLoaded();
+    renderSummary();
+    renderHdmapStatus();
+    draw();
+  });
+  selectedHdmap = hdmapManifest[0] || null;
+  renderHdmapStatus();
+}
+
 async function loadSample(file) {
   const json = await fetch(`./samples/${file}`).then((r) => r.json());
   setScenario(json, file);
 }
 
 function renderLayerToggles() {
-  layerToggles.innerHTML = "";
-  for (const [key, label] of layerDefs) {
+  renderToggleGroup(scenarioLayerToggles, scenarioLayerDefs);
+  renderToggleGroup(hdmapLayerToggles, hdmapLayerDefs);
+}
+
+function renderToggleGroup(container, defs) {
+  container.innerHTML = "";
+  for (const [key, label] of defs) {
     const row = document.createElement("label");
     row.className = "toggle";
     row.innerHTML = `<input type="checkbox" ${layers[key] ? "checked" : ""} data-layer="${key}" /><span>${label}</span>`;
-    layerToggles.appendChild(row);
+    container.appendChild(row);
   }
-  layerToggles.addEventListener("change", (event) => {
+  container.addEventListener("change", (event) => {
     const input = event.target.closest("input[data-layer]");
     if (!input) return;
     layers[input.dataset.layer] = input.checked;
     if (input.dataset.layer === "swapDims") renderObjects();
+    if (input.dataset.layer === "map" && input.checked) ensureMapLoaded();
+    renderHdmapStatus();
     draw();
   });
 }
 
+function mapKeyForScene() {
+  const path = scene?.scenario?.roadNetwork?.logicFile?.filepath || "";
+  const sceneKey = path.split("/").filter(Boolean).pop() || null;
+  if (selectedHdmap) return selectedHdmap.id;
+  return sceneKey;
+}
+
+async function ensureMapLoaded() {
+  const key = mapKeyForScene();
+  if (!key || !layers.map) return;
+  if (mapLayer.key === key && mapLayer.data) return;
+  if (mapLayer.key === key && mapLayer.promise) return mapLayer.promise;
+
+  mapLayer = { key, data: null, status: `loading ${key}`, promise: null };
+  renderSummary();
+  renderHdmapStatus();
+  const mapInfo = selectedHdmap || hdmapManifest.find((item) => item.id === key);
+  const renderPath = mapInfo?.render || `samples/maps/${key}.json`;
+  const renderUrl = mapInfo ? `./hdmaps/${renderPath}` : `./${renderPath}`;
+  mapLayer.promise = fetch(renderUrl)
+    .then((response) => {
+      if (!response.ok) throw new Error(`map ${key} not found`);
+      return response.json();
+    })
+    .then((data) => {
+      mapLayer = { key, data, status: "loaded", promise: null };
+      renderSummary();
+      renderHdmapStatus();
+      draw();
+    })
+    .catch((error) => {
+      mapLayer = { key, data: null, status: `${error.message}: ${renderUrl}`, promise: null };
+      renderSummary();
+      renderHdmapStatus();
+      draw();
+    });
+  return mapLayer.promise;
+}
+
+function mapLayerSummary() {
+  if (!layers.map) return "关闭";
+  if (!mapLayer.data) return mapLayer.status || "未加载";
+  const m = mapLayer.data;
+  const summary = m.summary || {};
+  return `${mapLayer.key}: lane ${summary.lanes ?? m.lanes?.length ?? 0}, road ${summary.roads ?? 0}, overlap ${summary.overlaps ?? 0}, signal ${summary.signals ?? m.signals?.length ?? 0}`;
+}
+
+function renderHdmapStatus() {
+  if (!hdmapStatus) return;
+  if (!selectedHdmap) {
+    hdmapStatus.textContent = "无 HDMap manifest";
+    return;
+  }
+  const state = layers.map ? mapLayerSummary() : "未启用";
+  hdmapStatus.textContent = `${selectedHdmap.name || selectedHdmap.id} | ${state}`;
+}
+
 function renderSummary(label) {
   const s = scene;
+  if (!s) return;
   const grading = s.scenario.gradingConfigInfo || {};
   const realistic = s.scenario.realisticPerceptionConfig;
   const intelligent = s.scenario.intelligentObstacleConfig;
   summary.innerHTML = [
-    ["文件", label || "-"],
+    ["文件", label || s.label || "-"],
     ["名称", s.title],
     ["ID", s.id || "-"],
     ["地图", s.mapId || "-"],
+    ["地图图层", mapLayerSummary()],
     ["标签", s.tags.join(", ") || "-"],
     ["主车", `${pointText(s.ego.start)} -> ${pointText(s.ego.end)}`],
     ["对象", `${s.entities.length} 个，动态 spawn ${s.dynamic.length} 个，红绿灯 ${s.trafficLights.length} 个`],
+    ["坐标范围", `${fmt(s.bounds.minX, 1)}, ${fmt(s.bounds.minY, 1)} - ${fmt(s.bounds.maxX, 1)}, ${fmt(s.bounds.maxY, 1)} (${s.coordinatePoints.length} 点)`],
     ["评分", grading.baseGradeConfigFile || "-"],
     ["感知", realistic ? `miss ${percent(realistic.missDetection?.rate)}, id ${percent(realistic.idSwitch?.rate)}, range ${realistic.detectionRange?.rangeMax ?? "-"}` : "-"],
     ["智能障碍", intelligent ? `speed ${intelligent.cruiseSpeedMin ?? "-"}-${intelligent.cruiseSpeedMax ?? "-"} m/s, detection ${intelligent.detectionDistance ?? "-"} m` : "-"],
@@ -325,6 +486,7 @@ function draw() {
   ctx.fillStyle = "#dfe7ea";
   ctx.fillRect(0, 0, rect.width, rect.height);
   if (!scene) return;
+  if (layers.map) drawMapLayer(rect);
   if (layers.grid) drawGrid(rect);
   if (layers.ego) drawEgo();
   if (layers.dynamic) drawDynamic();
@@ -333,6 +495,157 @@ function draw() {
   if (layers.objectRoutes) drawObjectRoutes();
   if (layers.triggers) drawTriggerBadges();
   if (layers.bounds) drawBounds();
+}
+
+function drawMapLayer(rect) {
+  const map = mapLayer.data;
+  if (!map) {
+    drawMapStatus();
+    return;
+  }
+  const viewport = worldViewport(rect);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (layers.junctions) {
+    for (const junction of map.junctions || []) drawPolygon(junction.polygon, colors.junction, 0.12, viewport);
+  }
+  if (layers.crosswalks) {
+    for (const crosswalk of map.crosswalks || []) drawPolygon(crosswalk.polygon, colors.crosswalk, 0.18, viewport);
+  }
+  if (layers.parking) {
+    for (const parking of map.parkingSpaces || []) drawPolygon(parking.polygon, colors.parking, 0.12, viewport);
+  }
+  for (const lane of map.lanes || []) {
+    if (layers.laneBoundaries) {
+      drawMapLine(lane.left, boundaryColor(lane.leftTypes), 1.4, boundaryDash(lane.leftTypes), viewport);
+      drawMapLine(lane.right, boundaryColor(lane.rightTypes), 1.4, boundaryDash(lane.rightTypes), viewport);
+    }
+    if (layers.laneCenters) {
+      drawMapLine(lane.center, colors.laneCenter, 1, [4, 8], viewport);
+      if (layers.mapLabels && view.scale > 5 && lane.center?.length) {
+        drawLabel(lane.center[Math.floor(lane.center.length / 2)], lane.id, colors.laneCenter, 5, -5);
+      }
+    }
+    if (layers.laneTopology && view.scale > 2.5) {
+      drawLaneTopology(lane, map, viewport);
+    }
+  }
+  if (layers.mapSignals) {
+    for (const signal of map.signals || []) {
+      drawPolygon(signal.boundary, colors.mapSignal, 0.22, viewport);
+      for (const line of signal.stopLines || []) drawMapLine(line, colors.mapSignal, 2, [], viewport);
+      if (layers.mapLabels && view.scale > 4 && signal.boundary?.[0]) drawLabel(signal.boundary[0], signal.id, colors.mapSignal, 5, -5);
+    }
+    for (const stopSign of map.stopSigns || []) {
+      for (const line of stopSign.stopLines || []) drawMapLine(line, colors.bounds, 2.5, [], viewport);
+      if (layers.mapLabels && view.scale > 4 && stopSign.stopLines?.[0]?.[0]) drawLabel(stopSign.stopLines[0][0], stopSign.id, colors.bounds, 5, -5);
+    }
+  }
+  if (layers.yieldSigns) {
+    for (const yieldSign of map.yieldSigns || []) {
+      for (const line of yieldSign.stopLines || []) drawMapLine(line, colors.trigger, 2.5, [8, 5], viewport);
+      if (layers.mapLabels && view.scale > 4 && yieldSign.stopLines?.[0]?.[0]) drawLabel(yieldSign.stopLines[0][0], yieldSign.id, colors.trigger, 5, -5);
+    }
+  }
+  if (layers.speedBumps) {
+    for (const bump of map.speedBumps || []) {
+      for (const line of bump.position || []) drawMapLine(line, colors.speedBump, 3, [5, 4], viewport);
+      if (layers.mapLabels && view.scale > 4 && bump.position?.[0]?.[0]) drawLabel(bump.position[0][0], bump.id, colors.speedBump, 5, -5);
+    }
+  }
+  ctx.restore();
+}
+
+function drawLaneTopology(lane, map, viewport) {
+  if (!lane.center?.length || !polylineIntersects(lane.center, viewport)) return;
+  const laneById = map._laneById || (map._laneById = new globalThis.Map((map.lanes || []).map((item) => [item.id, item])));
+  const from = lane.center[lane.center.length - 1];
+  for (const id of lane.successorIds || []) {
+    const next = laneById.get(id);
+    if (!next?.center?.length) continue;
+    drawMapLine([from, next.center[0]], colors.topology, 0.8, [3, 5], viewport);
+  }
+}
+
+function drawMapStatus() {
+  const text = `map: ${mapLayer.status || "未加载"}`;
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
+  ctx.strokeStyle = "rgba(99,112,122,0.35)";
+  roundRect(ctx, 20, 42, Math.min(420, 28 + text.length * 7), 20, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = colors.laneBoundary;
+  ctx.font = "12px system-ui";
+  ctx.fillText(text, 30, 56);
+}
+
+function worldViewport(rect) {
+  const topLeft = screenToWorld(0, 0);
+  const bottomRight = screenToWorld(rect.width, rect.height);
+  return {
+    minX: Math.min(topLeft.x, bottomRight.x),
+    maxX: Math.max(topLeft.x, bottomRight.x),
+    minY: Math.min(topLeft.y, bottomRight.y),
+    maxY: Math.max(topLeft.y, bottomRight.y),
+  };
+}
+
+function drawPolygon(points, color, alpha, viewport) {
+  if (!points?.length || !polylineIntersects(points, viewport)) return;
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const q = worldToScreen(p);
+    if (i === 0) ctx.moveTo(q.x, q.y);
+    else ctx.lineTo(q.x, q.y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = hexToRgba(color, alpha);
+  ctx.strokeStyle = hexToRgba(color, 0.45);
+  ctx.lineWidth = 1;
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawMapLine(points, color, width, dash, viewport) {
+  if (!points?.length || !polylineIntersects(points, viewport)) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash);
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const q = worldToScreen(p);
+    if (i === 0) ctx.moveTo(q.x, q.y);
+    else ctx.lineTo(q.x, q.y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function polylineIntersects(points, viewport) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    if (!Number.isFinite(p?.x) || !Number.isFinite(p?.y)) continue;
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  return maxX >= viewport.minX && minX <= viewport.maxX && maxY >= viewport.minY && minY <= viewport.maxY;
+}
+
+function boundaryColor(types = []) {
+  if (types.some((type) => type.includes("YELLOW"))) return "#aa8b25";
+  if (types.some((type) => type.includes("CURB"))) return "#7a4c38";
+  return colors.laneBoundary;
+}
+
+function boundaryDash(types = []) {
+  if (types.some((type) => type.includes("DOTTED"))) return [7, 7];
+  return [];
 }
 
 function drawGrid(rect) {
@@ -595,6 +908,6 @@ window.addEventListener("resize", resizeCanvas);
 
 renderLayerToggles();
 resizeCanvas();
-loadManifest().catch((error) => {
+Promise.all([loadManifest(), loadHdmapManifest()]).catch((error) => {
   summary.innerHTML = `<div class="kv"><b>错误</b><span>${escapeHtml(error.message)}</span></div>`;
 });

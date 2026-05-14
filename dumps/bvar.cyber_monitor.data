@@ -1,8 +1,8 @@
 cyber_monitor_bvar_dump_interval : 10
-cyber_monitor_bvar_sampler_collector_usage : 0.00118772
-cyber_monitor_cpu_usage_count : 1282
+cyber_monitor_bvar_sampler_collector_usage : 0.000918583
+cyber_monitor_cpu_usage_count : 3511
 cyber_monitor_gcc_version : "7.5.0"
-cyber_monitor_mem_resident_usage_count : 1325
+cyber_monitor_mem_resident_usage_count : 3776
 cyber_monitor_monitor_reader9248_0_apollo_localization_pose_cyber_count : 0
 cyber_monitor_monitor_reader9248_0_apollo_localization_pose_proc_count : 0
 cyber_monitor_monitor_reader9248_0_apollo_localization_pose_process : 0
@@ -217,6 +217,6 @@ cyber_monitor_pgrp : 9248
 cyber_monitor_pid : 9248
 cyber_monitor_ppid : 84263
 cyber_monitor_system_core_count : 20
-cyber_monitor_system_loadavg_15m : 2.130
-cyber_monitor_system_loadavg_1m : 1.890
-cyber_monitor_system_loadavg_5m : 2.150
+cyber_monitor_system_loadavg_15m : 1.620
+cyber_monitor_system_loadavg_1m : 1.300
+cyber_monitor_system_loadavg_5m : 1.440

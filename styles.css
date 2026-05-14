@@ -143,6 +143,12 @@ select:hover {
   gap: 8px;
 }
 
+.status-line {
+  min-height: 22px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .kv {
   display: grid;
   grid-template-columns: 92px 1fr;
@@ -270,6 +276,14 @@ select:hover {
 
 .legend .ego {
   background: var(--accent);
+}
+
+.legend .lane {
+  background: #4d5961;
+}
+
+.legend .junction {
+  background: #8a7a2d;
 }
 
 .legend .static {

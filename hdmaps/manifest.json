@@ -1,0 +1,16 @@
+{
+  "maps": [
+    {
+      "id": "Xh_2026_contest",
+      "name": "Xh_2026_contest",
+      "render": "Xh_2026_contest/export/base_map.render.json",
+      "full": "Xh_2026_contest/export/base_map.full.json",
+      "raw": {
+        "base": "Xh_2026_contest/raw/base_map.bin",
+        "sim": "Xh_2026_contest/raw/sim_map.bin",
+        "routing": "Xh_2026_contest/raw/routing_map.bin",
+        "meta": "Xh_2026_contest/raw/metaInfo.json"
+      }
+    }
+  ]
+}

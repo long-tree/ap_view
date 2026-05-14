@@ -28,8 +28,22 @@
         </section>
 
         <section class="panel">
-          <h2>图层</h2>
-          <div id="layerToggles" class="toggles"></div>
+          <h2>HDMap</h2>
+          <label class="field">
+            <span>高精地图</span>
+            <select id="hdmapSelect"></select>
+          </label>
+          <div id="hdmapStatus" class="status-line">未加载</div>
+        </section>
+
+        <section class="panel">
+          <h2>Scenario 图层</h2>
+          <div id="scenarioLayerToggles" class="toggles"></div>
+        </section>
+
+        <section class="panel">
+          <h2>HDMap 图层</h2>
+          <div id="hdmapLayerToggles" class="toggles"></div>
         </section>
 
         <section class="panel">
@@ -52,6 +66,8 @@
         <canvas id="viewer" width="1600" height="1000"></canvas>
         <div class="legend">
           <span><i class="ego"></i>主车起终点</span>
+          <span><i class="lane"></i>Lane中心/边界</span>
+          <span><i class="junction"></i>路口/区域</span>
           <span><i class="static"></i>静态障碍物</span>
           <span><i class="vehicle"></i>车辆</span>
           <span><i class="traffic"></i>红绿灯</span>
@@ -60,6 +76,6 @@
       </main>
     </div>
 
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20260513-hdmap"></script>
   </body>
 </html>
