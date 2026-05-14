@@ -89,7 +89,8 @@ input {
 }
 
 select,
-button {
+button,
+input[type="text"] {
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -100,6 +101,11 @@ button {
 button {
   padding: 0 12px;
   cursor: pointer;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 0 8px;
 }
 
 button:hover,

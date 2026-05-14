@@ -81,6 +81,14 @@
             <button id="exportPathButton" type="button">导出离散点</button>
             <button id="clearPathButton" type="button">清空曲线</button>
           </div>
+          <label class="field">
+            <span>首点 lane_id（可选 predecessor）</span>
+            <input id="pathStartLaneInput" type="text" placeholder="自动使用首点最近 lane" />
+          </label>
+          <label class="field">
+            <span>末点 lane_id（可选 successor）</span>
+            <input id="pathEndLaneInput" type="text" placeholder="自动使用末点最近 lane" />
+          </label>
           <div id="pathPointList" class="route-point-list"></div>
         </section>
 

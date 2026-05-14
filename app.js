@@ -20,6 +20,8 @@ const clearRouteButton = document.getElementById("clearRouteButton");
 const routePointList = document.getElementById("routePointList");
 const pathEditToggle = document.getElementById("pathEditToggle");
 const pathResolutionInput = document.getElementById("pathResolutionInput");
+const pathStartLaneInput = document.getElementById("pathStartLaneInput");
+const pathEndLaneInput = document.getElementById("pathEndLaneInput");
 const exportPathButton = document.getElementById("exportPathButton");
 const clearPathButton = document.getElementById("clearPathButton");
 const pathPointList = document.getElementById("pathPointList");
@@ -97,6 +99,7 @@ let scenes = [];
 let currentScenarioEntries = [];
 let sampleCache = new Map();
 let pathControlPoints = [];
+let pathSegmentHandles = [];
 let draggingPathPoint = null;
 
 function resizeCanvas() {
@@ -1106,7 +1109,11 @@ function drawPathCurve() {
   if (!pathControlPoints.length) return;
   const sampled = sampledPathPoints(Math.max(0.2, Number(pathResolutionInput.value) || 1));
   if (sampled.length >= 2) drawPolyline(sampled, colors.path, 3, []);
-  if (pathControlPoints.length >= 2) drawPolyline(pathControlPoints, hexToRgba(colors.path, 0.42), 1.2, [5, 5]);
+  for (let i = 0; i < pathControlPoints.length - 1; i += 1) {
+    const handle = pathSegmentHandles[i] || segmentMidpoint(i);
+    drawPolyline([pathControlPoints[i], handle, pathControlPoints[i + 1]], hexToRgba(colors.path, 0.32), 1.2, [5, 5]);
+    drawPoint(handle, "", colors.path, 4);
+  }
   pathControlPoints.forEach((point, index) => {
     drawPoint(point, String(index + 1), colors.path, 7);
   });
@@ -1123,7 +1130,7 @@ function renderPathPointList() {
     row.className = "route-point-row";
     row.innerHTML = `
       <b>${index + 1}</b>
-      <span>x ${fmt(point.x, 2)} y ${fmt(point.y, 2)}</span>
+      <span>锚点 x ${fmt(point.x, 2)} y ${fmt(point.y, 2)}</span>
       <button type="button" data-path-delete="${index}">删除</button>
     `;
     pathPointList.appendChild(row);
@@ -1140,36 +1147,61 @@ function nearestPathControlPoint(screenX, screenY) {
   return best?.index ?? null;
 }
 
+function nearestPathHandle(screenX, screenY) {
+  let best = null;
+  for (let i = 0; i < pathControlPoints.length - 1; i += 1) {
+    const q = worldToScreen(pathSegmentHandles[i] || segmentMidpoint(i));
+    const distance = Math.hypot(q.x - screenX, q.y - screenY);
+    if (distance <= 14 && (!best || distance < best.distance)) best = { index: i, distance };
+  }
+  return best?.index ?? null;
+}
+
+function nearestPathSegment(screenX, screenY) {
+  let best = null;
+  for (let i = 0; i < pathControlPoints.length - 1; i += 1) {
+    for (let j = 0; j <= 24; j += 1) {
+      const q = worldToScreen(segmentPointAt(i, j / 24));
+      const distance = Math.hypot(q.x - screenX, q.y - screenY);
+      if (distance <= 18 && (!best || distance < best.distance)) best = { index: i, distance };
+    }
+  }
+  return best?.index ?? null;
+}
+
 function removePathPoint(index) {
   pathControlPoints.splice(index, 1);
+  pathSegmentHandles.splice(Math.max(0, index - 1), 1);
   renderPathPointList();
   draw();
 }
 
-function curvePointAt(points, t) {
-  if (points.length === 1) return points[0];
-  const max = points.length - 1;
-  const scaled = Math.min(max - 1e-9, Math.max(0, t) * max);
-  const i = Math.floor(scaled);
-  const localT = scaled - i;
-  const p0 = points[Math.max(0, i - 1)];
-  const p1 = points[i];
-  const p2 = points[Math.min(max, i + 1)];
-  const p3 = points[Math.min(max, i + 2)];
-  const tt = localT * localT;
-  const ttt = tt * localT;
+function segmentMidpoint(index) {
+  const a = pathControlPoints[index];
+  const b = pathControlPoints[index + 1];
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function segmentPointAt(index, t) {
+  const a = pathControlPoints[index];
+  const b = pathControlPoints[index + 1];
+  const h = pathSegmentHandles[index] || segmentMidpoint(index);
+  const u = 1 - t;
   return {
-    x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * localT + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * tt + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * ttt),
-    y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * localT + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * tt + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * ttt),
+    x: u * u * a.x + 2 * u * t * h.x + t * t * b.x,
+    y: u * u * a.y + 2 * u * t * h.y + t * t * b.y,
   };
 }
 
 function sampledPathPoints(resolution) {
   if (pathControlPoints.length <= 1) return pathControlPoints.map((point) => ({ ...point }));
-  const denseCount = Math.max(80, pathControlPoints.length * 40);
   const dense = [];
-  for (let i = 0; i <= denseCount; i += 1) {
-    dense.push(curvePointAt(pathControlPoints, i / denseCount));
+  for (let i = 0; i < pathControlPoints.length - 1; i += 1) {
+    const perSegment = 48;
+    for (let j = 0; j <= perSegment; j += 1) {
+      if (i > 0 && j === 0) continue;
+      dense.push(segmentPointAt(i, j / perSegment));
+    }
   }
   const sampled = [dense[0]];
   let carry = 0;
@@ -1196,29 +1228,33 @@ function sampledPathPoints(resolution) {
 function pathExportPayload() {
   const resolution = Math.max(0.2, Number(pathResolutionInput.value) || 1);
   const points = sampledPathPoints(resolution);
-  return JSON.stringify({
-    format: "discrete_xy_path",
-    resolution,
-    pointCount: points.length,
-    controlPoints: pathControlPoints.map((point, index) => ({
-      index: index + 1,
-      x: Number(point.x.toFixed(6)),
-      y: Number(point.y.toFixed(6)),
-    })),
-    points: points.map((point, index) => ({
-      index: index + 1,
-      x: Number(point.x.toFixed(6)),
-      y: Number(point.y.toFixed(6)),
-    })),
-  }, null, 2);
+  if (points.length < 2) {
+    return "# manual_path.pb.txt requires at least two path_point entries.";
+  }
+  const startLane = pathStartLaneInput.value.trim() || nearestLaneSl(points[0])?.laneId || "";
+  const endLane = pathEndLaneInput.value.trim() || nearestLaneSl(points[points.length - 1])?.laneId || "";
+  return points.map((point, index) => {
+    const fields = [
+      `x: ${Number(point.x.toFixed(6))}`,
+      `y: ${Number(point.y.toFixed(6))}`,
+      "z: 0.0",
+    ];
+    if (index === 0 && startLane) fields.push(`lane_id: "${escapeProtoString(startLane)}"`);
+    if (index === points.length - 1 && endLane) fields.push(`lane_id: "${escapeProtoString(endLane)}"`);
+    return `path_point { ${fields.join(" ")} }`;
+  }).join("\n");
 }
 
 function showPathExport() {
-  exportModalTitle.textContent = "导出路径离散点";
+  exportModalTitle.textContent = "导出 manual_path.pb.txt";
   routeExportText.value = pathExportPayload();
   exportModal.classList.remove("hidden");
   routeExportText.focus();
   routeExportText.select();
+}
+
+function escapeProtoString(text) {
+  return text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 canvas.addEventListener("wheel", (event) => {
@@ -1242,12 +1278,19 @@ canvas.addEventListener("mousedown", (event) => {
     const sx = event.clientX - rect.left;
     const sy = event.clientY - rect.top;
     const existingIndex = nearestPathControlPoint(sx, sy);
-    if (existingIndex === null) {
-      pathControlPoints.push(screenToWorld(sx, sy));
-      draggingPathPoint = pathControlPoints.length - 1;
-      renderPathPointList();
+    const handleIndex = existingIndex === null ? nearestPathHandle(sx, sy) : null;
+    const segmentIndex = existingIndex === null && handleIndex === null ? nearestPathSegment(sx, sy) : null;
+    if (existingIndex !== null) {
+      draggingPathPoint = { type: "anchor", index: existingIndex };
+    } else if (handleIndex !== null) {
+      draggingPathPoint = { type: "handle", index: handleIndex };
+    } else if (segmentIndex !== null) {
+      pathSegmentHandles[segmentIndex] = screenToWorld(sx, sy);
+      draggingPathPoint = { type: "handle", index: segmentIndex };
     } else {
-      draggingPathPoint = existingIndex;
+      pathControlPoints.push(screenToWorld(sx, sy));
+      draggingPathPoint = { type: "anchor", index: pathControlPoints.length - 1 };
+      renderPathPointList();
     }
     draw();
     return;
@@ -1284,7 +1327,11 @@ window.addEventListener("mousemove", (event) => {
     const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
     cursorReadout.textContent = cursorText(world);
     if (draggingPathPoint !== null) {
-      pathControlPoints[draggingPathPoint] = world;
+      if (draggingPathPoint.type === "anchor") {
+        pathControlPoints[draggingPathPoint.index] = world;
+      } else {
+        pathSegmentHandles[draggingPathPoint.index] = world;
+      }
       renderPathPointList();
       draw();
       return;
@@ -1330,6 +1377,7 @@ clearRouteButton.addEventListener("click", () => {
 });
 clearPathButton.addEventListener("click", () => {
   pathControlPoints = [];
+  pathSegmentHandles = [];
   renderPathPointList();
   draw();
 });
