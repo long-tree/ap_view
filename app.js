@@ -11,6 +11,14 @@ const objectList = document.getElementById("objectList");
 const fitButton = document.getElementById("fitButton");
 const resetButton = document.getElementById("resetButton");
 const cursorReadout = document.getElementById("cursorReadout");
+const routeAddToggle = document.getElementById("routeAddToggle");
+const routeConnectToggle = document.getElementById("routeConnectToggle");
+const exportRouteButton = document.getElementById("exportRouteButton");
+const clearRouteButton = document.getElementById("clearRouteButton");
+const routePointList = document.getElementById("routePointList");
+const exportModal = document.getElementById("exportModal");
+const closeExportButton = document.getElementById("closeExportButton");
+const routeExportText = document.getElementById("routeExportText");
 
 const hdmapLayerDefs = [
   ["map", "启用HDMap"],
@@ -58,6 +66,7 @@ const colors = {
   mapSignal: "#8d4c73",
   topology: "#1f6f9d",
   speedBump: "#984f22",
+  route: "#111827",
 };
 
 let layers = Object.fromEntries([...scenarioLayerDefs, ...hdmapLayerDefs].map(([key]) => [key, true]));
@@ -73,6 +82,8 @@ let mapLayer = { key: null, data: null, status: "off", promise: null };
 let view = { scale: 1, offsetX: 0, offsetY: 0 };
 let dragging = false;
 let dragStart = null;
+let pointerDown = null;
+let routePoints = [];
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
@@ -493,6 +504,7 @@ function draw() {
   if (layers.trafficLights) drawTrafficLights();
   if (layers.objects) drawObjects();
   if (layers.objectRoutes) drawObjectRoutes();
+  drawRoutePoints();
   if (layers.triggers) drawTriggerBadges();
   if (layers.bounds) drawBounds();
 }
@@ -721,6 +733,20 @@ function drawObjectRoutes() {
   }
 }
 
+function drawRoutePoints() {
+  if (!routePoints.length) return;
+  if (routeConnectToggle.checked && routePoints.length >= 2) {
+    drawPolyline(routePoints.map((point) => point.world), colors.route, 2.5, []);
+  }
+  for (const point of routePoints) {
+    drawPoint(point.world, String(point.index), colors.route, 8);
+    if (layers.labels) {
+      const lane = point.sl?.laneId || "-";
+      drawLabel(point.world, `${point.index} ${lane}`, colors.route, 10, -10);
+    }
+  }
+}
+
 function drawTriggerBadges() {
   let i = 0;
   for (const trigger of scene.triggers) {
@@ -911,6 +937,88 @@ function cursorText(world) {
   return `${xy} | road: ${sl.roadId}, lane: ${sl.laneId}, s: ${fmt(sl.s, 2)}, l: ${fmt(sl.l, 2)}`;
 }
 
+function addRoutePoint(world) {
+  const sl = nearestLaneSl(world);
+  routePoints.push({
+    index: routePoints.length + 1,
+    world: { x: world.x, y: world.y },
+    sl: sl ? {
+      roadId: sl.roadId,
+      sectionId: sl.sectionId,
+      laneId: sl.laneId,
+      s: sl.s,
+      l: sl.l,
+      distance: sl.distance,
+    } : null,
+  });
+  renderRoutePointList();
+  draw();
+}
+
+function renderRoutePointList() {
+  routePointList.innerHTML = "";
+  if (!routePoints.length) {
+    routePointList.innerHTML = `<div class="empty">暂无路由点</div>`;
+    return;
+  }
+  for (const point of routePoints) {
+    const row = document.createElement("div");
+    row.className = "route-point-row";
+    const sl = point.sl;
+    row.innerHTML = `
+      <b>${point.index}</b>
+      <span>${sl ? `${escapeHtml(sl.laneId)} s ${fmt(sl.s, 2)} l ${fmt(sl.l, 2)}` : "未匹配 lane"}</span>
+      <button type="button" data-route-delete="${point.index}">删除</button>
+    `;
+    routePointList.appendChild(row);
+  }
+}
+
+function removeRoutePoint(index) {
+  routePoints = routePoints
+    .filter((point) => point.index !== index)
+    .map((point, i) => ({ ...point, index: i + 1 }));
+  renderRoutePointList();
+  draw();
+}
+
+function routeExportPayload() {
+  return JSON.stringify({
+    format: "lane_s_l",
+    map: mapLayer.key || selectedHdmap?.id || null,
+    routingRequest: {
+      waypoint: routePoints.map((point) => {
+        const waypoint = {
+          index: point.index,
+          pose: {
+            x: Number(point.world.x.toFixed(6)),
+            y: Number(point.world.y.toFixed(6)),
+          },
+        };
+        if (point.sl) {
+          waypoint.lane = {
+            roadId: point.sl.roadId,
+            sectionId: point.sl.sectionId,
+            id: point.sl.laneId,
+            s: Number(point.sl.s.toFixed(3)),
+            l: Number(point.sl.l.toFixed(3)),
+          };
+        } else {
+          waypoint.lane = null;
+        }
+        return waypoint;
+      }),
+    },
+  }, null, 2);
+}
+
+function showRouteExport() {
+  routeExportText.value = routeExportPayload();
+  exportModal.classList.remove("hidden");
+  routeExportText.focus();
+  routeExportText.select();
+}
+
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
   const rect = canvas.getBoundingClientRect();
@@ -926,12 +1034,24 @@ canvas.addEventListener("wheel", (event) => {
 }, { passive: false });
 
 canvas.addEventListener("mousedown", (event) => {
+  pointerDown = { x: event.clientX, y: event.clientY };
   dragging = true;
   dragStart = { x: event.clientX, y: event.clientY, offsetX: view.offsetX, offsetY: view.offsetY };
   canvas.classList.add("dragging");
 });
 
-window.addEventListener("mouseup", () => {
+window.addEventListener("mouseup", (event) => {
+  if (pointerDown && routeAddToggle.checked) {
+    const dx = event.clientX - pointerDown.x;
+    const dy = event.clientY - pointerDown.y;
+    const moved = Math.hypot(dx, dy);
+    const rect = canvas.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (inside && moved < 4) {
+      addRoutePoint(screenToWorld(event.clientX - rect.left, event.clientY - rect.top));
+    }
+  }
+  pointerDown = null;
   dragging = false;
   canvas.classList.remove("dragging");
 });
@@ -955,11 +1075,28 @@ fileInput.addEventListener("change", async () => {
   setScenario(json, file.name);
 });
 
+routeConnectToggle.addEventListener("change", draw);
+routePointList.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-route-delete]");
+  if (!button) return;
+  removeRoutePoint(Number(button.dataset.routeDelete));
+});
+exportRouteButton.addEventListener("click", showRouteExport);
+clearRouteButton.addEventListener("click", () => {
+  routePoints = [];
+  renderRoutePointList();
+  draw();
+});
+closeExportButton.addEventListener("click", () => exportModal.classList.add("hidden"));
+exportModal.addEventListener("click", (event) => {
+  if (event.target === exportModal) exportModal.classList.add("hidden");
+});
 fitButton.addEventListener("click", fitToBounds);
 resetButton.addEventListener("click", () => currentScenario && setScenario(currentScenario, "current"));
 window.addEventListener("resize", resizeCanvas);
 
 renderLayerToggles();
+renderRoutePointList();
 resizeCanvas();
 Promise.all([loadManifest(), loadHdmapManifest()]).catch((error) => {
   summary.innerHTML = `<div class="kv"><b>错误</b><span>${escapeHtml(error.message)}</span></div>`;

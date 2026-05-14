@@ -206,6 +206,64 @@ select:hover {
   overflow-wrap: anywhere;
 }
 
+.route-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.route-controls button {
+  width: 100%;
+}
+
+.route-point-list {
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  margin-top: 10px;
+  overflow: auto;
+}
+
+.route-point-row {
+  display: grid;
+  grid-template-columns: 22px 1fr 48px;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #e5ecef;
+  border-radius: 6px;
+  background: #fbfcfc;
+  padding: 6px;
+}
+
+.route-point-row b {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #172026;
+  color: #fff;
+  font-size: 12px;
+}
+
+.route-point-row span {
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-point-row button {
+  min-height: 28px;
+  padding: 0 6px;
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .stage {
   position: relative;
   min-width: 0;
@@ -282,6 +340,10 @@ select:hover {
   background: #4d5961;
 }
 
+.legend .route {
+  background: #111827;
+}
+
 .legend .junction {
   background: #8a7a2d;
 }
@@ -300,6 +362,52 @@ select:hover {
 
 .legend .dynamic {
   background: #7357b8;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: rgba(23, 32, 38, 0.42);
+  padding: 18px;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-card {
+  width: min(760px, 100%);
+  border: 1px solid rgba(28, 42, 49, 0.2);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(25, 45, 54, 0.22);
+  padding: 14px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+#routeExportText {
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  resize: vertical;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @media (max-width: 900px) {

@@ -47,6 +47,23 @@
         </section>
 
         <section class="panel">
+          <h2>路由点</h2>
+          <div class="route-controls">
+            <label class="toggle">
+              <input id="routeAddToggle" type="checkbox" checked />
+              <span>点击添加</span>
+            </label>
+            <label class="toggle">
+              <input id="routeConnectToggle" type="checkbox" checked />
+              <span>连接路由点</span>
+            </label>
+            <button id="exportRouteButton" type="button">导出</button>
+            <button id="clearRouteButton" type="button">清空</button>
+          </div>
+          <div id="routePointList" class="route-point-list"></div>
+        </section>
+
+        <section class="panel">
           <h2>信息</h2>
           <div id="summary" class="summary"></div>
         </section>
@@ -67,6 +84,7 @@
         <div class="legend">
           <span><i class="ego"></i>主车起终点</span>
           <span><i class="lane"></i>Lane中心/边界</span>
+          <span><i class="route"></i>路由点</span>
           <span><i class="junction"></i>路口/区域</span>
           <span><i class="static"></i>静态障碍物</span>
           <span><i class="vehicle"></i>车辆</span>
@@ -76,6 +94,16 @@
       </main>
     </div>
 
-    <script src="./app.js?v=20260514-sl-hover"></script>
+    <div id="exportModal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h2>导出路由点</h2>
+          <button id="closeExportButton" type="button">关闭</button>
+        </div>
+        <textarea id="routeExportText" readonly></textarea>
+      </div>
+    </div>
+
+    <script src="./app.js?v=20260514-route-points"></script>
   </body>
 </html>
