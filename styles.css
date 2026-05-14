@@ -19,6 +19,7 @@ html,
 body {
   height: 100%;
   margin: 0;
+  overflow: hidden;
   color: var(--ink);
   background: var(--bg);
   font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -33,10 +34,12 @@ input {
 .app {
   display: grid;
   grid-template-columns: 360px 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
 }
 
 .sidebar {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -75,6 +78,10 @@ input {
   margin-bottom: 10px;
 }
 
+.compact-field {
+  margin-bottom: 0;
+}
+
 .field span,
 .upload span {
   color: var(--muted);
@@ -98,6 +105,31 @@ button {
 button:hover,
 select:hover {
   border-color: #9fb0b8;
+}
+
+#sampleSelect {
+  min-height: 142px;
+}
+
+.sample-actions,
+.path-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.path-controls {
+  margin-bottom: 0;
+}
+
+.compact-field input {
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 8px;
+  background: #fff;
 }
 
 .upload {
@@ -344,6 +376,10 @@ select:hover {
   background: #111827;
 }
 
+.legend .path {
+  background: #c2582c;
+}
+
 .legend .junction {
   background: #8a7a2d;
 }
@@ -413,15 +449,20 @@ select:hover {
 @media (max-width: 900px) {
   .app {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, 48vh) 1fr;
   }
 
   .sidebar {
-    max-height: 48vh;
+    height: 48vh;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
+  .stage {
+    min-height: 0;
+  }
+
   #viewer {
-    height: 52vh;
+    height: 100%;
   }
 }

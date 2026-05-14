@@ -1,6 +1,8 @@
 const canvas = document.getElementById("viewer");
 const ctx = canvas.getContext("2d");
 const sampleSelect = document.getElementById("sampleSelect");
+const selectAllSamplesButton = document.getElementById("selectAllSamplesButton");
+const clearSamplesButton = document.getElementById("clearSamplesButton");
 const fileInput = document.getElementById("fileInput");
 const hdmapSelect = document.getElementById("hdmapSelect");
 const hdmapStatus = document.getElementById("hdmapStatus");
@@ -16,7 +18,13 @@ const routeConnectToggle = document.getElementById("routeConnectToggle");
 const exportRouteButton = document.getElementById("exportRouteButton");
 const clearRouteButton = document.getElementById("clearRouteButton");
 const routePointList = document.getElementById("routePointList");
+const pathEditToggle = document.getElementById("pathEditToggle");
+const pathResolutionInput = document.getElementById("pathResolutionInput");
+const exportPathButton = document.getElementById("exportPathButton");
+const clearPathButton = document.getElementById("clearPathButton");
+const pathPointList = document.getElementById("pathPointList");
 const exportModal = document.getElementById("exportModal");
+const exportModalTitle = document.getElementById("exportModalTitle");
 const closeExportButton = document.getElementById("closeExportButton");
 const routeExportText = document.getElementById("routeExportText");
 
@@ -67,6 +75,7 @@ const colors = {
   topology: "#1f6f9d",
   speedBump: "#984f22",
   route: "#111827",
+  path: "#c2582c",
 };
 
 let layers = Object.fromEntries([...scenarioLayerDefs, ...hdmapLayerDefs].map(([key]) => [key, true]));
@@ -84,6 +93,11 @@ let dragging = false;
 let dragStart = null;
 let pointerDown = null;
 let routePoints = [];
+let scenes = [];
+let currentScenarioEntries = [];
+let sampleCache = new Map();
+let pathControlPoints = [];
+let draggingPathPoint = null;
 
 function resizeCanvas() {
   const dpr = window.devicePixelRatio || 1;
@@ -262,27 +276,46 @@ function collectTriggers(storyboard) {
   return triggers;
 }
 
-function setScenario(json, label) {
-  currentScenario = json;
-  scene = extractScenario(json);
-  scene.label = label;
-  renderSummary(label);
+function setScenarios(entries) {
+  currentScenarioEntries = entries;
+  scenes = entries.map((entry) => {
+    const extracted = extractScenario(entry.json);
+    extracted.label = entry.label;
+    return extracted;
+  });
+  scene = scenes[0] || null;
+  currentScenario = scene?.json || null;
+  renderSummary();
   renderObjects();
   fitToBounds();
   if (layers.map) ensureMapLoaded();
+  draw();
+}
+
+function setScenario(json, label) {
+  setScenarios([{ json, label }]);
 }
 
 async function loadManifest() {
   const manifest = await fetch("./samples/manifest.json").then((r) => r.json());
   sampleSelect.innerHTML = "";
-  for (const item of manifest.scenarios) {
+  manifest.scenarios.forEach((item, index) => {
     const option = document.createElement("option");
     option.value = item.file;
     option.textContent = item.name;
+    option.selected = index === 0;
     sampleSelect.appendChild(option);
-  }
-  sampleSelect.addEventListener("change", () => loadSample(sampleSelect.value));
-  if (manifest.scenarios[0]) loadSample(manifest.scenarios[0].file);
+  });
+  sampleSelect.addEventListener("change", loadSelectedSamples);
+  selectAllSamplesButton.addEventListener("click", () => {
+    for (const option of sampleSelect.options) option.selected = true;
+    loadSelectedSamples();
+  });
+  clearSamplesButton.addEventListener("click", () => {
+    for (const option of sampleSelect.options) option.selected = false;
+    setScenarios([]);
+  });
+  if (manifest.scenarios[0]) loadSelectedSamples();
 }
 
 async function loadHdmapManifest() {
@@ -308,8 +341,17 @@ async function loadHdmapManifest() {
 }
 
 async function loadSample(file) {
-  const json = await fetch(`./samples/${file}`).then((r) => r.json());
-  setScenario(json, file);
+  if (!sampleCache.has(file)) {
+    sampleCache.set(file, fetch(`./samples/${file}`).then((r) => r.json()));
+  }
+  const json = await sampleCache.get(file);
+  return { json, label: file };
+}
+
+async function loadSelectedSamples() {
+  const files = Array.from(sampleSelect.selectedOptions).map((option) => option.value);
+  const entries = await Promise.all(files.map(loadSample));
+  setScenarios(entries);
 }
 
 function renderLayerToggles() {
@@ -395,7 +437,25 @@ function renderHdmapStatus() {
 
 function renderSummary(label) {
   const s = scene;
-  if (!s) return;
+  if (!s) {
+    summary.innerHTML = `<div class="empty">未选择场景</div>`;
+    return;
+  }
+  if (scenes.length > 1) {
+    const bounds = boundsForScenes();
+    const entityCount = scenes.reduce((sum, item) => sum + item.entities.length, 0);
+    const dynamicCount = scenes.reduce((sum, item) => sum + item.dynamic.length, 0);
+    const trafficCount = scenes.reduce((sum, item) => sum + item.trafficLights.length, 0);
+    summary.innerHTML = [
+      ["文件", `${scenes.length} 个场景`],
+      ["主场景", s.label || "-"],
+      ["地图", [...new Set(scenes.map((item) => item.mapId).filter(Boolean))].join(", ") || "-"],
+      ["地图图层", mapLayerSummary()],
+      ["对象", `${entityCount} 个，动态 spawn ${dynamicCount} 个，红绿灯 ${trafficCount} 个`],
+      ["坐标范围", `${fmt(bounds.minX, 1)}, ${fmt(bounds.minY, 1)} - ${fmt(bounds.maxX, 1)}, ${fmt(bounds.maxY, 1)}`],
+    ].map(([k, v]) => `<div class="kv"><b>${k}</b><span>${escapeHtml(String(v))}</span></div>`).join("");
+    return;
+  }
   const grading = s.scenario.gradingConfigInfo || {};
   const realistic = s.scenario.realisticPerceptionConfig;
   const intelligent = s.scenario.intelligentObstacleConfig;
@@ -425,20 +485,26 @@ function percent(v) {
 
 function renderObjects() {
   objectList.innerHTML = "";
-  for (const entity of scene.entities) {
-    const row = document.createElement("div");
-    row.className = "object-row";
-    const color = colorForKind(entity.kind);
-    const dims = effectiveDims(entity);
-    const suffix = layers.swapDims ? " | 已翻转" : "";
-    row.innerHTML = `
-      <i class="swatch" style="background:${color}"></i>
-      <div>
-        <strong>${escapeHtml(entity.ref)} <span>${escapeHtml(entity.kind)}</span></strong>
-        <small>pos ${pointText(entity.teleport)} | L ${dims.length ?? "-"} W ${dims.width ?? "-"} H ${entity.dims.height ?? "-"} | speed ${entity.speed ?? "-"}${suffix}</small>
-      </div>
-    `;
-    objectList.appendChild(row);
+  if (!scenes.length) {
+    objectList.innerHTML = `<div class="empty">未选择场景</div>`;
+    return;
+  }
+  for (const item of scenes) {
+    for (const entity of item.entities) {
+      const row = document.createElement("div");
+      row.className = "object-row";
+      const color = colorForKind(entity.kind);
+      const dims = effectiveDims(entity);
+      const suffix = layers.swapDims ? " | 已翻转" : "";
+      row.innerHTML = `
+        <i class="swatch" style="background:${color}"></i>
+        <div>
+          <strong>${escapeHtml(entity.ref)} <span>${escapeHtml(entity.kind)}</span></strong>
+          <small>${escapeHtml(item.label || "scenario")} | pos ${pointText(entity.teleport)} | L ${dims.length ?? "-"} W ${dims.width ?? "-"} H ${entity.dims.height ?? "-"} | speed ${entity.speed ?? "-"}${suffix}</small>
+        </div>
+      `;
+      objectList.appendChild(row);
+    }
   }
 }
 
@@ -461,10 +527,10 @@ function escapeHtml(text) {
 }
 
 function fitToBounds() {
-  if (!scene) return;
+  if (!scenes.length) return;
   const rect = canvas.getBoundingClientRect();
   const pad = 80;
-  const b = scene.bounds;
+  const b = boundsForScenes();
   const w = Math.max(1, b.maxX - b.minX);
   const h = Math.max(1, b.maxY - b.minY);
   const scaleX = (rect.width - pad * 2) / w;
@@ -475,6 +541,17 @@ function fitToBounds() {
   view.offsetX = rect.width / 2 - cx * view.scale;
   view.offsetY = rect.height / 2 + cy * view.scale;
   draw();
+}
+
+function boundsForScenes() {
+  const points = [];
+  for (const item of scenes) {
+    points.push({ x: item.bounds.minX, y: item.bounds.minY });
+    points.push({ x: item.bounds.maxX, y: item.bounds.maxY });
+  }
+  for (const point of routePoints) points.push(point.world);
+  for (const point of pathControlPoints) points.push(point);
+  return boundsFor(points);
 }
 
 function worldToScreen(p) {
@@ -496,17 +573,22 @@ function draw() {
   ctx.clearRect(0, 0, rect.width, rect.height);
   ctx.fillStyle = "#dfe7ea";
   ctx.fillRect(0, 0, rect.width, rect.height);
-  if (!scene) return;
   if (layers.map) drawMapLayer(rect);
   if (layers.grid) drawGrid(rect);
-  if (layers.ego) drawEgo();
-  if (layers.dynamic) drawDynamic();
-  if (layers.trafficLights) drawTrafficLights();
-  if (layers.objects) drawObjects();
-  if (layers.objectRoutes) drawObjectRoutes();
+  const previousScene = scene;
+  for (const item of scenes) {
+    scene = item;
+    if (layers.ego) drawEgo();
+    if (layers.dynamic) drawDynamic();
+    if (layers.trafficLights) drawTrafficLights();
+    if (layers.objects) drawObjects();
+    if (layers.objectRoutes) drawObjectRoutes();
+    if (layers.triggers) drawTriggerBadges();
+    if (layers.bounds) drawBounds();
+  }
+  scene = previousScene;
   drawRoutePoints();
-  if (layers.triggers) drawTriggerBadges();
-  if (layers.bounds) drawBounds();
+  drawPathCurve();
 }
 
 function drawMapLayer(rect) {
@@ -1013,7 +1095,127 @@ function routeExportPayload() {
 }
 
 function showRouteExport() {
+  exportModalTitle.textContent = "导出路由点";
   routeExportText.value = routeExportPayload();
+  exportModal.classList.remove("hidden");
+  routeExportText.focus();
+  routeExportText.select();
+}
+
+function drawPathCurve() {
+  if (!pathControlPoints.length) return;
+  const sampled = sampledPathPoints(Math.max(0.2, Number(pathResolutionInput.value) || 1));
+  if (sampled.length >= 2) drawPolyline(sampled, colors.path, 3, []);
+  if (pathControlPoints.length >= 2) drawPolyline(pathControlPoints, hexToRgba(colors.path, 0.42), 1.2, [5, 5]);
+  pathControlPoints.forEach((point, index) => {
+    drawPoint(point, String(index + 1), colors.path, 7);
+  });
+}
+
+function renderPathPointList() {
+  pathPointList.innerHTML = "";
+  if (!pathControlPoints.length) {
+    pathPointList.innerHTML = `<div class="empty">暂无控制点</div>`;
+    return;
+  }
+  pathControlPoints.forEach((point, index) => {
+    const row = document.createElement("div");
+    row.className = "route-point-row";
+    row.innerHTML = `
+      <b>${index + 1}</b>
+      <span>x ${fmt(point.x, 2)} y ${fmt(point.y, 2)}</span>
+      <button type="button" data-path-delete="${index}">删除</button>
+    `;
+    pathPointList.appendChild(row);
+  });
+}
+
+function nearestPathControlPoint(screenX, screenY) {
+  let best = null;
+  for (let i = 0; i < pathControlPoints.length; i += 1) {
+    const q = worldToScreen(pathControlPoints[i]);
+    const distance = Math.hypot(q.x - screenX, q.y - screenY);
+    if (distance <= 14 && (!best || distance < best.distance)) best = { index: i, distance };
+  }
+  return best?.index ?? null;
+}
+
+function removePathPoint(index) {
+  pathControlPoints.splice(index, 1);
+  renderPathPointList();
+  draw();
+}
+
+function curvePointAt(points, t) {
+  if (points.length === 1) return points[0];
+  const max = points.length - 1;
+  const scaled = Math.min(max - 1e-9, Math.max(0, t) * max);
+  const i = Math.floor(scaled);
+  const localT = scaled - i;
+  const p0 = points[Math.max(0, i - 1)];
+  const p1 = points[i];
+  const p2 = points[Math.min(max, i + 1)];
+  const p3 = points[Math.min(max, i + 2)];
+  const tt = localT * localT;
+  const ttt = tt * localT;
+  return {
+    x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * localT + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * tt + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * ttt),
+    y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * localT + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * tt + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * ttt),
+  };
+}
+
+function sampledPathPoints(resolution) {
+  if (pathControlPoints.length <= 1) return pathControlPoints.map((point) => ({ ...point }));
+  const denseCount = Math.max(80, pathControlPoints.length * 40);
+  const dense = [];
+  for (let i = 0; i <= denseCount; i += 1) {
+    dense.push(curvePointAt(pathControlPoints, i / denseCount));
+  }
+  const sampled = [dense[0]];
+  let carry = 0;
+  for (let i = 1; i < dense.length; i += 1) {
+    let a = dense[i - 1];
+    const b = dense[i];
+    let segment = Math.hypot(b.x - a.x, b.y - a.y);
+    while (carry + segment >= resolution && segment > 1e-9) {
+      const ratio = (resolution - carry) / segment;
+      const point = { x: a.x + (b.x - a.x) * ratio, y: a.y + (b.y - a.y) * ratio };
+      sampled.push(point);
+      a = point;
+      segment = Math.hypot(b.x - a.x, b.y - a.y);
+      carry = 0;
+    }
+    carry += segment;
+  }
+  const last = dense[dense.length - 1];
+  const tail = sampled[sampled.length - 1];
+  if (!tail || Math.hypot(last.x - tail.x, last.y - tail.y) > 1e-6) sampled.push(last);
+  return sampled;
+}
+
+function pathExportPayload() {
+  const resolution = Math.max(0.2, Number(pathResolutionInput.value) || 1);
+  const points = sampledPathPoints(resolution);
+  return JSON.stringify({
+    format: "discrete_xy_path",
+    resolution,
+    pointCount: points.length,
+    controlPoints: pathControlPoints.map((point, index) => ({
+      index: index + 1,
+      x: Number(point.x.toFixed(6)),
+      y: Number(point.y.toFixed(6)),
+    })),
+    points: points.map((point, index) => ({
+      index: index + 1,
+      x: Number(point.x.toFixed(6)),
+      y: Number(point.y.toFixed(6)),
+    })),
+  }, null, 2);
+}
+
+function showPathExport() {
+  exportModalTitle.textContent = "导出路径离散点";
+  routeExportText.value = pathExportPayload();
   exportModal.classList.remove("hidden");
   routeExportText.focus();
   routeExportText.select();
@@ -1035,13 +1237,33 @@ canvas.addEventListener("wheel", (event) => {
 
 canvas.addEventListener("mousedown", (event) => {
   pointerDown = { x: event.clientX, y: event.clientY };
+  const rect = canvas.getBoundingClientRect();
+  if (pathEditToggle.checked) {
+    const sx = event.clientX - rect.left;
+    const sy = event.clientY - rect.top;
+    const existingIndex = nearestPathControlPoint(sx, sy);
+    if (existingIndex === null) {
+      pathControlPoints.push(screenToWorld(sx, sy));
+      draggingPathPoint = pathControlPoints.length - 1;
+      renderPathPointList();
+    } else {
+      draggingPathPoint = existingIndex;
+    }
+    draw();
+    return;
+  }
   dragging = true;
   dragStart = { x: event.clientX, y: event.clientY, offsetX: view.offsetX, offsetY: view.offsetY };
   canvas.classList.add("dragging");
 });
 
 window.addEventListener("mouseup", (event) => {
-  if (pointerDown && routeAddToggle.checked) {
+  if (draggingPathPoint !== null) {
+    draggingPathPoint = null;
+    pointerDown = null;
+    return;
+  }
+  if (pointerDown && routeAddToggle.checked && !pathEditToggle.checked) {
     const dx = event.clientX - pointerDown.x;
     const dy = event.clientY - pointerDown.y;
     const moved = Math.hypot(dx, dy);
@@ -1061,6 +1283,12 @@ window.addEventListener("mousemove", (event) => {
   if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
     const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
     cursorReadout.textContent = cursorText(world);
+    if (draggingPathPoint !== null) {
+      pathControlPoints[draggingPathPoint] = world;
+      renderPathPointList();
+      draw();
+      return;
+    }
   }
   if (!dragging || !dragStart) return;
   view.offsetX = dragStart.offsetX + event.clientX - dragStart.x;
@@ -1069,22 +1297,40 @@ window.addEventListener("mousemove", (event) => {
 });
 
 fileInput.addEventListener("change", async () => {
-  const file = fileInput.files?.[0];
-  if (!file) return;
-  const json = JSON.parse(await file.text());
-  setScenario(json, file.name);
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
+  const entries = await Promise.all(files.map(async (file) => ({
+    json: JSON.parse(await file.text()),
+    label: file.name,
+  })));
+  setScenarios(entries);
 });
 
 routeConnectToggle.addEventListener("change", draw);
+pathEditToggle.addEventListener("change", () => {
+  canvas.style.cursor = pathEditToggle.checked ? "crosshair" : "";
+});
+pathResolutionInput.addEventListener("input", draw);
 routePointList.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-route-delete]");
   if (!button) return;
   removeRoutePoint(Number(button.dataset.routeDelete));
 });
+pathPointList.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-path-delete]");
+  if (!button) return;
+  removePathPoint(Number(button.dataset.pathDelete));
+});
 exportRouteButton.addEventListener("click", showRouteExport);
+exportPathButton.addEventListener("click", showPathExport);
 clearRouteButton.addEventListener("click", () => {
   routePoints = [];
   renderRoutePointList();
+  draw();
+});
+clearPathButton.addEventListener("click", () => {
+  pathControlPoints = [];
+  renderPathPointList();
   draw();
 });
 closeExportButton.addEventListener("click", () => exportModal.classList.add("hidden"));
@@ -1092,11 +1338,12 @@ exportModal.addEventListener("click", (event) => {
   if (event.target === exportModal) exportModal.classList.add("hidden");
 });
 fitButton.addEventListener("click", fitToBounds);
-resetButton.addEventListener("click", () => currentScenario && setScenario(currentScenario, "current"));
+resetButton.addEventListener("click", () => currentScenarioEntries.length && setScenarios(currentScenarioEntries));
 window.addEventListener("resize", resizeCanvas);
 
 renderLayerToggles();
 renderRoutePointList();
+renderPathPointList();
 resizeCanvas();
 Promise.all([loadManifest(), loadHdmapManifest()]).catch((error) => {
   summary.innerHTML = `<div class="kv"><b>错误</b><span>${escapeHtml(error.message)}</span></div>`;
